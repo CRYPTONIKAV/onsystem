@@ -34,7 +34,10 @@ export {
   loadTokens,
   mergeTokens,
   parseCssTokens,
+  parseDesignMd,
   parseDtcgTokens,
+  toDesignMd,
+  toDtcg,
   TokenIndex,
 } from './tokens/index.js';
 export type * from './types.js';

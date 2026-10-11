@@ -516,6 +516,7 @@ const docs = {
   requiredCheck: doc('required-check.md'),
   clients: doc('clients.md'),
   configuration: doc('configuration.md'),
+  tokens: doc('tokens.md'),
   eslint: doc('eslint.md'),
   rules: doc('rules.md'),
   tools: doc('tools.md'),

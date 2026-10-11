@@ -103,9 +103,11 @@ export function scopedFamilies(
     const family = tokenFamily(token);
     if (!family || scoped.has(family)) continue;
     if (NAMED_SCOPES.has(family)) scoped.add(family);
-    // Without usage, only the families named for a part of the UI are scoped.
+    // Without usage, only the families named for a part of the UI are scoped; nor is a token
+    // code has no way to write (a DESIGN.md's: no class, no custom property), whose use is unseen.
     else if (
       filesUsing &&
+      token.usage.length > 0 &&
       !CORE_FAMILIES.has(family) &&
       !STATUS_WORDS.has(family) &&
       (filesUsing.get(family)?.size ?? 0) <= 1

@@ -37,6 +37,12 @@ export const DOCS_PAGES = [
       'How the design system is found with zero config, and the config file for other layouts.',
   },
   {
+    href: '/docs/tokens',
+    title: 'Design tokens',
+    description:
+      'Tokens from stylesheets, DTCG 2025.10 files and a DESIGN.md, and onsystem export to write them as DTCG or DESIGN.md.',
+  },
+  {
     href: '/docs/eslint',
     title: 'ESLint plugin',
     description:

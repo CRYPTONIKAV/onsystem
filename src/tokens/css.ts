@@ -51,6 +51,26 @@ const NAMESPACES: [prefix: string, category: TokenCategory][] = [
   ['--text-', 'typography'],
 ];
 
+/**
+ * A Tailwind v4 theme variable split into its namespace and key: `--color-primary` →
+ * `--color` and `primary`, `--spacing` → `--spacing` and `''` (the spacing unit).
+ */
+export function themeVariable(
+  name: string,
+): { namespace: string; key: string; category: TokenCategory } | undefined {
+  if (name === '--spacing') return { namespace: '--spacing', key: '', category: 'spacing' };
+  const found = NAMESPACES.find(
+    ([prefix]) => name.startsWith(prefix) && name.length > prefix.length,
+  );
+  return (
+    found && {
+      namespace: found[0].slice(0, -1),
+      key: name.slice(found[0].length),
+      category: found[1],
+    }
+  );
+}
+
 const TAILWIND_DEFAULT_SPACING = '0.25rem';
 /** Tailwind v4's default `--radius-*` scale; a theme overrides keys one by one. */
 const TAILWIND_DEFAULT_RADIUS: Record<string, string> = {
@@ -162,6 +182,13 @@ export function cssSheetTokens(sheets: readonly CssSheet[]): {
 
   const tokens: Token[] = [];
   const consumed = new Set<string>();
+  // Tokens whose own value is `var(--other)`, by the variable they read.
+  const aliases = new Map<Token, string>();
+  const add = (token: Token, raw: string) => {
+    tokens.push(token);
+    const alias = varAlias(raw);
+    if (alias) aliases.set(token, alias);
+  };
 
   for (const variable of theme.values()) {
     const namespace = NAMESPACES.find(([prefix]) => variable.name.startsWith(prefix));
@@ -177,7 +204,7 @@ export function cssSheetTokens(sheets: readonly CssSheet[]): {
     const target = alias ? base.get(alias) : undefined;
     if (alias && target) {
       consumed.add(alias);
-      tokens.push(
+      add(
         finalize({
           name: alias.slice(2),
           category,
@@ -190,10 +217,11 @@ export function cssSheetTokens(sheets: readonly CssSheet[]): {
           line: target.line,
           file: target.file,
         }),
+        target.value,
       );
       continue;
     }
-    tokens.push(
+    add(
       finalize({
         name: variable.name.slice(2),
         category,
@@ -207,12 +235,13 @@ export function cssSheetTokens(sheets: readonly CssSheet[]): {
         line: variable.line,
         file: variable.file,
       }),
+      variable.value,
     );
   }
 
   for (const variable of base.values()) {
     if (consumed.has(variable.name)) continue;
-    tokens.push(
+    add(
       finalize({
         name: variable.name.slice(2),
         category: categorize(variable.name, resolveValue(variable.value, lookup)),
@@ -223,7 +252,16 @@ export function cssSheetTokens(sheets: readonly CssSheet[]): {
         line: variable.line,
         file: variable.file,
       }),
+      variable.value,
     );
+  }
+
+  // `--card: var(--background)` is an alias of the background token, which an export keeps as
+  // a reference. A variable no token defines (Tailwind's palette, `next/font`) is no alias.
+  const byVar = new Map(tokens.map((t) => [t.cssVar ?? `--${t.name}`, t]));
+  for (const [token, name] of aliases) {
+    const target = byVar.get(name);
+    if (target && target !== token) token.aliasOf = target.name;
   }
 
   // `--spacing-*: initial` clears `--spacing` too: `p-4` no longer exists, only the named steps.
@@ -336,6 +374,11 @@ function categorize(name: string, value: string): TokenCategory {
   }
   if (parseColor(value, { bareHsl: true })) return 'color';
   return 'other';
+}
+
+/** `--x` for a value that is exactly `var(--x)`. */
+function varAlias(value: string): string | undefined {
+  return /^var\(\s*(--[\w-]+)\s*\)$/.exec(value.trim())?.[1];
 }
 
 /** Follows plain `var(--x)` aliases so the token shows its concrete value. */

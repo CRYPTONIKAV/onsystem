@@ -30,7 +30,7 @@ Coding agents write UI from their training data, not from your design system. As
 
 ## What it checks
 
-onsystem reads your components, `cva` and `tv` variants, parts and tokens from source with the TypeScript compiler, and checks `.tsx` and `.jsx` against them. Every finding has a rule id, a location and the fix.
+onsystem reads your components, `cva` and `tv` variants, parts and tokens from source with the TypeScript compiler, and checks `.tsx` and `.jsx` against them. Every finding has a rule id, a location and the fix. Tokens come from your stylesheets, [DTCG 2025.10 files or a DESIGN.md](https://onsystem.vercel.app/docs/tokens), and `onsystem export` writes them out as either.
 
 | Rule                             | Default | Catches                                                                         |
 | -------------------------------- | ------- | ------------------------------------------------------------------------------- |

@@ -14,6 +14,7 @@ import {
   type Oklch,
 } from './color.js';
 import { cssSheetTokens, readCssSheet, type CssSheet } from './css.js';
+import { parseDesignMd } from './design-md.js';
 import { parseDtcgTokens, type DtcgOptions } from './dtcg.js';
 import {
   isNamedScope,
@@ -28,7 +29,9 @@ import {
 import { evaluateLength, lengthToPx } from './units.js';
 
 export { parseCssTokens } from './css.js';
+export { parseDesignMd } from './design-md.js';
 export { parseDtcgTokens } from './dtcg.js';
+export { toDesignMd, toDtcg } from './export.js';
 
 export interface TokenSource {
   file: string;
@@ -60,6 +63,10 @@ export async function loadTokens(
       if (ext === '.json') {
         const options: DtcgOptions = source.prefix ? { prefix: source.prefix } : {};
         const result = parseDtcgTokens(text, rel, options);
+        all.push(...result.tokens);
+        warnings.push(...result.warnings);
+      } else if (ext === '.md' || ext === '.markdown') {
+        const result = parseDesignMd(text, rel);
         all.push(...result.tokens);
         warnings.push(...result.warnings);
       } else {

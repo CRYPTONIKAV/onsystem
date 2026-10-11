@@ -82,6 +82,7 @@ export function llmsFullTxt(): string {
     ['Make it a required check on agent pull requests', '/docs/required-check', docs.requiredCheck],
     ['Set up your agent', '/docs/clients', docs.clients],
     ['Configuration', '/docs/configuration', docs.configuration],
+    ['Design tokens', '/docs/tokens', docs.tokens],
     ['ESLint plugin', '/docs/eslint', docs.eslint],
     [
       'Rules',

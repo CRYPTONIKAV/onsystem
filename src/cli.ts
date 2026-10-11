@@ -30,6 +30,7 @@ import { explainProject } from './explain.js';
 import { init } from './init.js';
 import { formatDiagnostics, uncheckedNotice, type OutputFormat } from './lint/index.js';
 import { serveStdio } from './server/stdio.js';
+import { toDesignMd, toDtcg } from './tokens/export.js';
 import type { CheckResult, DesignSystemModel, Diagnostic } from './types.js';
 import { stderrLogger, silentLogger } from './util/log.js';
 import { isInside, matchesGlob, relativePath, toPosix } from './util/paths.js';
@@ -51,6 +52,9 @@ Usage
   onsystem check <paths...>      Lint files, folders or globs with the check_ui rules
                                  (for CI)
   onsystem inspect               Print what was extracted from the project
+  onsystem export --format dtcg|design-md
+                                 Print the tokens it found as a DTCG 2025.10 file or a
+                                 DESIGN.md (--out <file> writes them to a file)
   onsystem init                  Write onsystem.config.json from what was found, run a
                                  dry-run check and offer a baseline
   onsystem help                  Show this help
@@ -69,7 +73,9 @@ Options
   --docs <glob>           Component docs (Markdown/MDX), repeatable
   --no-cache              Ignore the on-disk extraction cache
   --no-watch              serve: do not reload when files change
-  --format <format>       check: pretty | json | github | sarif (default: pretty)
+  --format <format>       check: pretty | json | github | sarif (default: pretty);
+                          export: dtcg | design-md
+  --out <file>            export: write to this file instead of stdout
   --max-warnings <n>      check: exit 1 when there are more than n warnings
   --update-baseline       check: record the current findings as accepted, and exit 0
   --baseline <file>       check: baseline file (default: ${BASELINE_FILE} in the root,
@@ -155,7 +161,8 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
         docs: { type: 'string', multiple: true },
         cache: { type: 'boolean', default: true },
         watch: { type: 'boolean', default: true },
-        format: { type: 'string', default: 'pretty' },
+        format: { type: 'string' },
+        out: { type: 'string' },
         'max-warnings': { type: 'string' },
         baseline: { type: 'string' },
         'update-baseline': { type: 'boolean', default: false },
@@ -231,6 +238,8 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
         return await check(rest, configOptions, values, io);
       case 'inspect':
         return await inspect(configOptions, values, io);
+      case 'export':
+        return await exportTokens(configOptions, values, io);
       case 'init':
         return await init(
           configOptions,
@@ -263,7 +272,7 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
 
 interface CheckValues {
   cache: boolean;
-  format: string;
+  format?: string | undefined;
   'max-warnings'?: string | undefined;
   baseline?: string | undefined;
   'update-baseline': boolean;
@@ -302,9 +311,9 @@ async function check(
     io.stderr(`check: pass files, folders or globs, e.g. ${NAME} check .`);
     return 2;
   }
-  const format = values.format as OutputFormat;
+  const format = (values.format ?? 'pretty') as OutputFormat;
   if (!['pretty', 'json', 'github', 'sarif'].includes(format)) {
-    io.stderr(`check: unknown --format "${values.format}" (pretty, json, github, sarif)`);
+    io.stderr(`check: unknown --format "${format}" (pretty, json, github, sarif)`);
     return 2;
   }
   const maxWarnings =
@@ -718,7 +727,7 @@ function listOf(items: readonly string[], max = 3): string {
 
 async function inspect(
   configOptions: LoadConfigOptions,
-  values: { cache: boolean; format: string; explain: boolean },
+  values: { cache: boolean; format?: string | undefined; explain: boolean },
   io: Io,
 ): Promise<number> {
   const target = await loadTarget(configOptions);
@@ -763,6 +772,67 @@ async function inspect(
   return 0;
 }
 
+/**
+ * `export --format dtcg|design-md`: the project's tokens as a DTCG 2025.10 file or a
+ * DESIGN.md, on stdout or in the `--out` file.
+ */
+async function exportTokens(
+  configOptions: LoadConfigOptions,
+  values: { cache: boolean; format?: string | undefined; out?: string | undefined },
+  io: Io,
+): Promise<number> {
+  const format = values.format;
+  if (format !== 'dtcg' && format !== 'design-md') {
+    io.stderr(
+      `export: pass --format dtcg or --format design-md${format === undefined ? '' : ` (not "${format}")`}`,
+    );
+    return 2;
+  }
+  const target = await loadTarget(configOptions);
+  warnDeprecated(target.config.deprecations, 'pretty', io);
+  if (target.workspace) {
+    const dirs = target.workspace.projects.map((p) => p.dir);
+    io.stderr(
+      `export: ${target.workspace.root} is a monorepo root, and each project has its own tokens. Pass --root with one of them${dirs.length ? ` (${listOf(dirs)})` : ''}.`,
+    );
+    return 2;
+  }
+  const ds = await loadDesignSystem(target.config, { cache: values.cache, logger: silentLogger });
+  if (!ds.tokens.length) {
+    io.stderr(
+      `export: no design tokens found in ${ds.root}. \`${NAME} inspect --explain\` shows where it looked.`,
+    );
+    return 2;
+  }
+  const result =
+    format === 'dtcg' ? toDtcg(ds.tokens) : toDesignMd(ds.tokens, { name: projectName(ds.root) });
+  for (const warning of result.warnings) io.stderr(`export: ${warning}`);
+  if (values.out === undefined) {
+    io.stdout(result.text.trimEnd());
+    return 0;
+  }
+  const file = path.resolve(io.cwd, values.out);
+  await fsp.mkdir(path.dirname(file), { recursive: true });
+  await fsp.writeFile(file, result.text);
+  io.stdout(
+    `Wrote ${plural(result.count, 'token')} to ${displayPath(io.cwd, file)} (${format === 'dtcg' ? 'DTCG 2025.10' : 'DESIGN.md'})`,
+  );
+  return 0;
+}
+
+/** The package name in the root's package.json, else the folder's name. */
+function projectName(root: string): string {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')) as {
+      name?: unknown;
+    };
+    if (typeof pkg.name === 'string' && pkg.name) return pkg.name;
+  } catch {
+    // No package.json, or not one we can read.
+  }
+  return path.basename(root);
+}
+
 function tokenCounts(model: DesignSystemModel): Map<string, number> {
   const counts = new Map<string, number>();
   for (const t of model.tokens) counts.set(t.category, (counts.get(t.category) ?? 0) + 1);
@@ -772,7 +842,7 @@ function tokenCounts(model: DesignSystemModel): Map<string, number> {
 /** Every project of a workspace root, with what was found in each, and the packages without one. */
 async function inspectWorkspace(
   workspace: Workspace,
-  values: { cache: boolean; format: string; explain: boolean },
+  values: { cache: boolean; format?: string | undefined; explain: boolean },
   io: Io,
 ): Promise<number> {
   const loaded = [];

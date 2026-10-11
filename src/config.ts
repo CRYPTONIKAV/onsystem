@@ -104,7 +104,9 @@ const configShape = {
   tokens: z
     .union([tokenSourceSchema, z.array(tokenSourceSchema)])
     .optional()
-    .describe('Token files: W3C DTCG JSON (*.json) or CSS custom properties (*.css).'),
+    .describe(
+      "Token files: W3C DTCG JSON (*.json), CSS custom properties (*.css) or a DESIGN.md's front matter (*.md).",
+    ),
   docs: globsSchema.optional().describe('Globs for per-component Markdown/MDX docs.'),
   tsconfig: z.string().optional().describe('tsconfig used to resolve types and path aliases.'),
   importPath: z
@@ -148,6 +150,8 @@ export function defineConfig(config: Config): Config {
 export interface TokenSourceConfig {
   path: string;
   prefix?: string | undefined;
+  /** Read only when no other source finds a token file (zero config's `DESIGN.md`). */
+  fallback?: boolean | undefined;
 }
 
 export interface ResolvedRule {
@@ -241,6 +245,11 @@ export const DEFAULT_TOKENS = [
   'app/app.css',
   '**/*.tokens.json',
 ];
+/**
+ * Zero config reads these only when none of the token files above exist: the tokens in a
+ * DESIGN.md's front matter, which describes a design system to agents.
+ */
+export const FALLBACK_TOKENS = ['DESIGN.md'];
 export const DEFAULT_DOCS = [
   'docs/components/**/*.{md,mdx}',
   'components/ui/**/*.{md,mdx}',
@@ -391,10 +400,13 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Resol
           typeof t === 'string' ? { path: fromBase(t) } : { ...t, path: fromBase(t.path) },
         )
       : // Detected stylesheets replace the stylesheet guesses, not DTCG files.
-        (detection?.tokens.length
-          ? [...detection.tokens, ...DEFAULT_TOKENS.filter((t) => t.endsWith('.json'))]
-          : DEFAULT_TOKENS
-        ).map((p) => ({ path: p }));
+        [
+          ...(detection?.tokens.length
+            ? [...detection.tokens, ...DEFAULT_TOKENS.filter((t) => t.endsWith('.json'))]
+            : DEFAULT_TOKENS
+          ).map((p) => ({ path: p })),
+          ...FALLBACK_TOKENS.map((p) => ({ path: p, fallback: true })),
+        ];
 
   return {
     root,

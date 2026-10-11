@@ -42,8 +42,12 @@ describe('detectProject: components.json', () => {
       'components.json (ui: @/registry/new-york/ui → registry/new-york/ui)',
     );
     expect(config.components).toEqual(['registry/new-york/ui/**/*.{tsx,jsx}']);
-    // The stylesheet replaces the guesses; DTCG files are still read.
-    expect(config.tokens).toEqual([{ path: 'styles/app.css' }, { path: '**/*.tokens.json' }]);
+    // The stylesheet replaces the guesses; DTCG files are still read, and a DESIGN.md without either.
+    expect(config.tokens).toEqual([
+      { path: 'styles/app.css' },
+      { path: '**/*.tokens.json' },
+      { path: 'DESIGN.md', fallback: true },
+    ]);
 
     const ds = await load(root);
     expect(ds.getComponent('Button')?.importPath).toBe('@/registry/new-york/ui/button');

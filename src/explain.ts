@@ -43,7 +43,12 @@ export function explainProject(ds: DesignSystem, cwd: string, indent = ''): stri
   field('exclude', listOf(config.exclude));
   field(
     'tokens',
-    listOf(config.tokens.map((t) => `${t.path}${t.prefix ? ` (prefix ${t.prefix})` : ''}`)),
+    listOf(
+      config.tokens.map(
+        (t) =>
+          `${t.path}${t.prefix ? ` (prefix ${t.prefix})` : ''}${t.fallback ? ' (when nothing else is found)' : ''}`,
+      ),
+    ),
   );
   field('docs', listOf(config.docs));
   field(

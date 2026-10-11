@@ -7,7 +7,7 @@ import path from 'node:path';
 import { glob } from 'tinyglobby';
 import type ts from 'typescript';
 
-import { loadConfig, rulesFor, type ResolvedConfig } from './config.js';
+import { loadConfig, rulesFor, type ResolvedConfig, type TokenSourceConfig } from './config.js';
 import { moduleResolver } from './detect.js';
 import { extractComponents } from './extract/components.js';
 import { attachDocs, parseDoc, type ParsedDoc } from './extract/docs.js';
@@ -238,13 +238,18 @@ async function resolveFiles(config: ResolvedConfig): Promise<ResolvedFiles> {
   const docs = await find(config, config.docs);
   const tokens: ResolvedFiles['tokens'] = [];
   const seen = new Set<string>();
-  for (const source of config.tokens) {
-    for (const file of await find(config, [source.path])) {
-      if (seen.has(file)) continue;
-      seen.add(file);
-      tokens.push({ file, prefix: source.prefix });
+  const add = async (sources: TokenSourceConfig[]) => {
+    for (const source of sources) {
+      for (const file of await find(config, [source.path])) {
+        if (seen.has(file)) continue;
+        seen.add(file);
+        tokens.push({ file, prefix: source.prefix });
+      }
     }
-  }
+  };
+  await add(config.tokens.filter((t) => !t.fallback));
+  // A DESIGN.md stands in only when no stylesheet or DTCG file was found.
+  if (!tokens.length) await add(config.tokens.filter((t) => t.fallback));
   return { components, tokens, docs };
 }
 

@@ -29,7 +29,7 @@
       }
     },
     "tokens": {
-      "description": "Token files: W3C DTCG JSON (*.json) or CSS custom properties (*.css).",
+      "description": "Token files: W3C DTCG JSON (*.json), CSS custom properties (*.css) or a DESIGN.md's front matter (*.md).",
       "anyOf": [
         {
           "anyOf": [
