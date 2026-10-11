@@ -1,5 +1,5 @@
 {
-  "$comment": "Public repositories pinned by commit, checked by scripts/corpus.mjs. `paths` limits the sparse fetch to those folders (plus root files and every package.json, tsconfig and components.json); without it the whole repository is fetched. A run's `args` are extra flags for `check`. A run from a monorepo root lists in `sameAs` the folders that another run checks from inside them, and must report the same files and findings there, file for file. Only source, styles, manifests and docs are fetched, and nothing in them is installed, built or run.",
+  "$comment": "Public repositories pinned by commit, checked by scripts/corpus.mjs. `paths` limits the sparse fetch to those folders (plus root files and every package.json, tsconfig and components.json); without it the whole repository is fetched. A run's `args` are extra flags for `check`. A run from a monorepo root lists in `sameAs` the folders that another run checks from inside them, and must report the same files and findings there, file for file. Only source, styles, manifests and docs are fetched, and nothing in them is installed, built or run. An app whose design system is a published library (MUI) lists in `install` the packages it needs per folder: the library, its peers and React's types, each at an exact version, with `before` pinning what they depend on (the newest versions published by that date). They are installed from npm with --ignore-scripts into a cached folder beside the checkouts (.installs), linked as the folder's node_modules; the repository's own package.json and lockfile are not used.",
   "repos": [
     {
       "name": "saas-starter",
@@ -129,6 +129,45 @@
           "args": ["--include-tests"]
         }
       ]
+    },
+    {
+      "name": "flowise",
+      "url": "https://github.com/FlowiseAI/Flowise",
+      "sha": "9291856d1ea4a4ceea9f8fef8ce14f4f6c81e8eb",
+      "paths": ["packages/ui"],
+      "install": {
+        "before": "2026-08-14",
+        "folders": {
+          "packages/ui": {
+            "@mui/material": "5.15.0",
+            "@emotion/react": "11.11.4",
+            "@emotion/styled": "11.11.0",
+            "react": "18.2.0",
+            "react-dom": "18.2.0",
+            "@types/react": "18.2.65"
+          }
+        }
+      },
+      "runs": [{ "name": "flowise-ui", "cwd": "packages/ui", "check": ["src"] }]
+    },
+    {
+      "name": "material-kit-react",
+      "url": "https://github.com/devias-io/material-kit-react",
+      "sha": "6423e1a2f092c50d7e1e22f3e43344df02af41de",
+      "install": {
+        "before": "2025-06-11",
+        "folders": {
+          ".": {
+            "@mui/material": "7.1.1",
+            "@emotion/react": "11.14.0",
+            "@emotion/styled": "11.14.0",
+            "react": "19.1.0",
+            "react-dom": "19.1.0",
+            "@types/react": "19.1.7"
+          }
+        }
+      },
+      "runs": [{ "name": "material-kit-react", "cwd": ".", "check": ["src"] }]
     }
   ]
 }

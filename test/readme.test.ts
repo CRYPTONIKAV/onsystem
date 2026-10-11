@@ -46,12 +46,16 @@ describe('the README', () => {
     let covered = 0;
     let weighted = 0;
     let unknown = 0;
+    let unknownInFlowise = 0;
     // A run from a monorepo root counts only the findings it adds to the runs from its projects.
     for (const [run, { rules, added }] of Object.entries(snapshot.runs)) {
       for (const [rule, counts] of Object.entries(added ?? rules)) {
         const n = counts.errors + counts.warnings;
         if (!rechecks.has(run)) distinct += n;
-        if (/^no-unknown-(component|prop|variant)$/.test(rule)) unknown += n;
+        if (/^no-unknown-(component|prop|variant)$/.test(rule)) {
+          unknown += n;
+          if (run === 'flowise-ui') unknownInFlowise += n;
+        }
         const stratum = sample.filter((l) => l.run === run && l.rule === rule);
         if (!stratum.length) continue;
         covered += n;
@@ -68,10 +72,13 @@ describe('the README', () => {
       `In a random sample of ${String(sample.length)} findings, ${String(right)} are clearly right (${pct(right / sample.length)}), ${String(debatable)} are debatable and ${String(fp)} are false positives (${pct(fp / sample.length)})`,
     );
     expect(text).toContain(`about ${pct(weighted / covered)} are false positives`);
+    // Invented components, props and variants: MUI's Flowise has most of them.
+    const unknownSample = sample.filter((l) => /^no-unknown-/.test(l.rule));
     expect(text).toContain(
-      `those three rules have ${String(unknown)} ${unknown === 1 ? 'finding' : 'findings'} in the corpus`,
+      `those three rules have ${String(unknown)} findings in the corpus, ${String(unknownInFlowise)} of them in Flowise, an MUI app`,
     );
-    expect(sample.some((l) => /^no-unknown-/.test(l.rule))).toBe(false);
+    expect(text).toContain(`the ${String(unknownSample.length)} in the sample are all right`);
+    expect(unknownSample.every((l) => l.verdict === 'TP')).toBe(true);
   });
 
   it('quotes the benchmark results in bench/agents', () => {

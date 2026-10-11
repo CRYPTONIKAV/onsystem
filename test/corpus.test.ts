@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -5,6 +8,7 @@ import {
   falsePositiveRate,
   findings,
   fingerprint,
+  installs,
   invalidLabels,
   labelKey,
   outside,
@@ -240,5 +244,79 @@ describe('corpus comparison', () => {
     expect(outside(findings('root', same), ['apps/web']).map((f) => f.file)).toEqual([
       'packages/ui/button.tsx',
     ]);
+  });
+});
+
+describe('corpus installs', () => {
+  const pinned = {
+    name: 'flowise',
+    install: {
+      before: '2026-08-13',
+      folders: {
+        'packages/ui': { '@mui/material': '5.15.0', '@types/react': '18.2.65', react: '18.2.0' },
+      },
+    },
+  };
+
+  it('installs pinned packages with --ignore-scripts beside the checkout, linked into the folder', () => {
+    const corpus = path.resolve('/corpus');
+    expect(installs(pinned, corpus)).toEqual([
+      {
+        folder: 'packages/ui',
+        dir: path.join(corpus, '.installs', 'flowise', 'packages', 'ui'),
+        link: path.join(corpus, 'flowise', 'packages', 'ui', 'node_modules'),
+        manifest: {
+          private: true,
+          dependencies: { '@mui/material': '5.15.0', '@types/react': '18.2.65', react: '18.2.0' },
+        },
+        args: [
+          'install',
+          '--ignore-scripts',
+          '--no-audit',
+          '--no-fund',
+          '--update-notifier=false',
+          '--loglevel=error',
+          '--before=2026-08-13',
+        ],
+      },
+    ]);
+    expect(installs({ name: 'chatbot' }, corpus)).toEqual([]);
+    const root = {
+      ...pinned,
+      install: { ...pinned.install, folders: { '.': { react: '19.1.0' } } },
+    };
+    expect(installs(root, corpus)[0]).toMatchObject({
+      dir: path.join(corpus, '.installs', 'flowise', '.root'),
+      link: path.join(corpus, 'flowise', 'node_modules'),
+    });
+  });
+
+  it('takes only exact versions, a date and folders inside the checkout', () => {
+    const corpus = path.resolve('/corpus');
+    const folders = (packages: Record<string, string>, folder = 'packages/ui') => ({
+      ...pinned,
+      install: { before: '2026-08-13', folders: { [folder]: packages } },
+    });
+    expect(() => installs(folders({ '@mui/material': '^5.15.0' }), corpus)).toThrow(
+      'flowise: install @mui/material@^5.15.0 in packages/ui: pin an exact version.',
+    );
+    expect(() => installs(folders({ react: 'latest' }), corpus)).toThrow('pin an exact version');
+    expect(() => installs(folders({ react: '18.2.0' }, '../elsewhere'), corpus)).toThrow(
+      'flowise: install folder ../elsewhere is not inside the checkout.',
+    );
+    expect(() =>
+      installs({ ...pinned, install: { ...pinned.install, before: 'soon' } }, corpus),
+    ).toThrow('flowise: install.before must be a date (2026-08-13), not "soon".');
+  });
+
+  it('pins every install in corpus/repos.json', () => {
+    const repos = JSON.parse(
+      fs.readFileSync(path.resolve(import.meta.dirname, '../corpus/repos.json'), 'utf8'),
+    ) as { repos: Parameters<typeof installs>[0][] };
+    const all = repos.repos.flatMap((repo) => installs(repo, path.resolve('/corpus')));
+    expect(all.length).toBeGreaterThan(0);
+    for (const install of all) {
+      expect(Object.keys(install.manifest.dependencies)).toContain('@mui/material');
+    }
   });
 });

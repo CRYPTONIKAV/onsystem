@@ -906,6 +906,63 @@
           "fixes": 3
         }
       }
+    },
+    "flowise-ui": {
+      "inspect": {
+        "detected": null,
+        "files": "0 component files, 0 token files, 0 docs",
+        "components": 133,
+        "parts": 14,
+        "tokens": {},
+        "warnings": 1
+      },
+      "files": 286,
+      "flagged": 113,
+      "rules": {
+        "icon-button-accessible-name": {
+          "errors": 283,
+          "warnings": 0,
+          "fixes": 0
+        },
+        "no-unknown-prop": {
+          "errors": 41,
+          "warnings": 0,
+          "fixes": 2
+        },
+        "no-unknown-variant": {
+          "errors": 14,
+          "warnings": 0,
+          "fixes": 11
+        },
+        "prefer-design-system-component": {
+          "errors": 33,
+          "warnings": 0,
+          "fixes": 33
+        }
+      }
+    },
+    "material-kit-react": {
+      "inspect": {
+        "detected": null,
+        "files": "0 component files, 0 token files, 0 docs",
+        "components": 135,
+        "parts": 14,
+        "tokens": {
+          "color": 98,
+          "radius": 1,
+          "typography": 1
+        },
+        "warnings": 0
+      },
+      "files": 59,
+      "flagged": 2,
+      "rules": {
+        "icon-button-accessible-name": {
+          "errors": 3,
+          "warnings": 0,
+          "fixes": 0
+        }
+      }
     }
   },
   "labels": {
@@ -1095,6 +1152,29 @@
     "a53a509e96b2": true,
     "b3672d54f9bf": true,
     "1faadec3a66e": true,
-    "4f94510dbe0b": false
+    "4f94510dbe0b": false,
+    "ef9254fc0383": true,
+    "a4ce51369955": true,
+    "bae7bbc33a90": true,
+    "257426872ce6": true,
+    "6355a148b09f": true,
+    "4739d14bf87c": true,
+    "5b4d0517d4e5": true,
+    "2ad7b33d04e2": true,
+    "066528522289": true,
+    "bb1f4267f4be": true,
+    "bff41aad0454": true,
+    "27a8dcceb679": true,
+    "258051b2d509": true,
+    "6cf735d35bcb": true,
+    "82f34f6d8cd9": true,
+    "51af3eb5c80b": true,
+    "061dfc512753": true,
+    "103207e8f9c3": true,
+    "4e6b58728fec": true,
+    "a3f8c03e9340": true,
+    "b90e25981693": true,
+    "83def359ed63": true,
+    "7bb8ed6ac890": true
   }
 }

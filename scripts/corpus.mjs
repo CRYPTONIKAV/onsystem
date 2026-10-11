@@ -17,7 +17,12 @@
 // The repositories are untrusted. They are fetched shallow and sparse (source, styles,
 // manifests and docs only), never installed or built, and nothing in them runs: a run whose
 // folder holds an onsystem config written in code (under its current name or the old
-// design-system-mcp one) is refused, since loading it would execute it. Run `pnpm build` first.
+// design-system-mcp one) is refused, since loading it would execute it. An app whose design
+// system is a published library (MUI) gets that library from npm, as its `install` in
+// corpus/repos.json pins it (the library, its peers and React's types at exact versions),
+// installed with --ignore-scripts into a cached folder beside the checkouts and linked as the
+// app folder's node_modules; the repository's own package.json and lockfile are not used.
+// Run `pnpm build` first.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -30,6 +35,7 @@ import {
   compare,
   falsePositiveRate,
   findings,
+  installs,
   invalidLabels,
   labelKey,
   outside,
@@ -155,6 +161,68 @@ function fetchAll(selected) {
     fs.writeFileSync(stamp, want);
     console.error(`fetched ${repo.name}@${repo.sha.slice(0, 7)} in ${seconds(started)}`);
   }
+  installAll(selected);
+}
+
+/**
+ * The npm packages a repository's `install` pins (a component library's type declarations, its
+ * peers and React's types), installed with --ignore-scripts into `.installs` beside the
+ * checkouts, reused while the pins stay the same, and linked as the folder's node_modules.
+ */
+function installAll(selected) {
+  for (const repo of new Set(selected.map((run) => run.repo))) {
+    for (const install of installs(repo, dir)) {
+      const stamp = path.join(install.dir, 'onsystem-install.json');
+      const want = JSON.stringify({ manifest: install.manifest, args: install.args });
+      const current =
+        fs.existsSync(stamp) &&
+        fs.readFileSync(stamp, 'utf8') === want &&
+        fs.existsSync(path.join(install.dir, 'node_modules'));
+      if (!current) {
+        const started = performance.now();
+        fs.rmSync(install.dir, { recursive: true, force: true });
+        fs.mkdirSync(install.dir, { recursive: true });
+        fs.writeFileSync(
+          path.join(install.dir, 'package.json'),
+          `${JSON.stringify(install.manifest, null, 2)}\n`,
+        );
+        const npm = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', install.args, {
+          cwd: install.dir,
+          encoding: 'utf8',
+          shell: process.platform === 'win32',
+        });
+        if (npm.status !== 0) {
+          throw new Error(
+            `npm ${install.args.join(' ')} failed in ${install.dir}:\n${npm.stderr || npm.error?.message || ''}`,
+          );
+        }
+        fs.writeFileSync(stamp, want);
+        const pins = Object.entries(install.manifest.dependencies)
+          .map(([name, version]) => `${name}@${version}`)
+          .join(', ');
+        const where = install.folder === '.' ? repo.name : `${repo.name}/${install.folder}`;
+        console.error(`installed ${pins} for ${where} in ${seconds(started)}`);
+      }
+      linkInstall(install);
+    }
+  }
+}
+
+/** The folder's node_modules in the checkout, pointing at what was installed for it. */
+function linkInstall({ dir: installed, link }) {
+  const target = path.join(installed, 'node_modules');
+  let stat;
+  try {
+    stat = fs.lstatSync(link);
+  } catch {
+    stat = undefined;
+  }
+  if (stat?.isSymbolicLink() && fs.realpathSync(link) === fs.realpathSync(target)) return;
+  if (stat && !stat.isSymbolicLink()) {
+    throw new Error(`${link} is in the checkout: the installed packages cannot be linked there.`);
+  }
+  if (stat) fs.unlinkSync(link);
+  fs.symlinkSync(target, link, 'junction');
 }
 
 /** Root files, every manifest, and the source of the folders the runs need (or the whole tree). */

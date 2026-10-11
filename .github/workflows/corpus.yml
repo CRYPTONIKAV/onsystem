@@ -38,7 +38,8 @@ jobs:
       - run: pnpm build
       # Outside the checkout: the CLI looks upwards for node_modules and workspace roots.
       - run: echo "CORPUS_DIR=${{ runner.temp }}/corpus" >> "$GITHUB_ENV"
-      # Restored and saved around the fetch, so a failing check still caches the checkouts.
+      # Restored and saved around the fetch, so a failing check still caches the checkouts and the
+      # pinned packages an MUI app's runs install beside them (corpus/repos.json `install`).
       - id: cache
         uses: actions/cache/restore@v6
         with:

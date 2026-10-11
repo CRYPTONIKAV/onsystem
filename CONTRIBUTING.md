@@ -54,6 +54,8 @@ The run fails when counts change (after a deliberate change, run `pnpm corpus --
 
 The repositories are untrusted: only source, styles, manifests and docs are fetched, nothing in them is installed, built or run, and a run whose folder has an `onsystem.config` (or `design-system-mcp.config`) written in code is refused. They live outside this repository (`$TMPDIR/onsystem-corpus`, or `--dir`/`CORPUS_DIR`), since the CLI looks upwards for `node_modules` and workspace roots. Other commands: `pnpm corpus fetch`, `pnpm corpus --only documenso` for one repository or run, and `pnpm corpus sample <run>` to print unlabelled findings with their code and a label to fill in (`--per-rule`, `--seed`, `--rule`, `--file`, `--line`).
 
+An app whose design system is a published library (MUI, read from its type declarations) is the one case where packages are installed: without the library, there is nothing to read. Its `install` in `corpus/repos.json` names the packages per folder, each at an exact version (the library, its peers and React's types), and a `before` date that pins what they depend on, as npm resolves it from packages published by then. `fetch` installs them from npm with `--ignore-scripts` into a folder beside the checkouts (`.installs`, cached with them), and links it as that folder's `node_modules`. The repository's own `package.json` and lockfile are not used, and none of its code runs.
+
 When a change fixes a false positive, add a label for it if there is none, run `pnpm corpus --update`, and put the changed counts (the table it prints) and the new false-positive rate in the pull request.
 
 ## Releasing
