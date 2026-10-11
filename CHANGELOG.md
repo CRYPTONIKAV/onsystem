@@ -1,5 +1,17 @@
 # onsystem (formerly @dgesteves/design-system-mcp)
 
+## 0.5.1
+
+### Patch Changes
+
+- [#79](https://github.com/dgesteves/onsystem/pull/79) [`ebb0fa8`](https://github.com/dgesteves/onsystem/commit/ebb0fa89f9c13888ec99baf342f5ddd115c77441) Thanks [@dgesteves](https://github.com/dgesteves)! - The GitHub Action's description is shorter than 125 characters, so the release can be published to the GitHub Marketplace.
+
+- [#80](https://github.com/dgesteves/onsystem/pull/80) [`037b19c`](https://github.com/dgesteves/onsystem/commit/037b19c59125a50fbda648f10e333d3528fb2632) Thanks [@dgesteves](https://github.com/dgesteves)! - `init` writes a config where `check` and `inspect` already find the design system without detecting one: an app with `components/ui` and no `components.json`. It spells out the default globs that match and the token files found, with `--yes`, without a terminal, and in one (where it no longer asks where the components are). Before, `init --yes` and `init` without a terminal exited 2 with "zero config found no design system".
+
+- [#84](https://github.com/dgesteves/onsystem/pull/84) [`7042a12`](https://github.com/dgesteves/onsystem/commit/7042a120b82c209e28ca49f433dfc16af51ab6a7) Thanks [@dgesteves](https://github.com/dgesteves)! - The package's npm page links to the website, onsystem.vercel.app, rather than the README on GitHub.
+
+- [#80](https://github.com/dgesteves/onsystem/pull/80) [`8549f8f`](https://github.com/dgesteves/onsystem/commit/8549f8fc125568529d5fa414f1539c2e50ac37d8) Thanks [@dgesteves](https://github.com/dgesteves)! - `npx onsystem` with no command, typed in a terminal, says on stderr what it is before it starts the MCP server, which otherwise sits waiting on stdin and looks hung: where to add it to an agent, and that `inspect` or `check .` is what to run by hand. An MCP client starts it with a pipe, not a terminal, so clients see nothing new.
+
 ## 0.5.0
 
 ### Minor Changes

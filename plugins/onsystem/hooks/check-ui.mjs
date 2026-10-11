@@ -30,7 +30,7 @@ import path from 'node:path';
 
 const PACKAGE = 'onsystem';
 // The exact release this plugin runs; scripts/sync-versions.mjs sets it with each release.
-const VERSION = '0.5.0';
+const VERSION = '0.5.1';
 const UI_FILE = /\.[jt]sx$/i;
 const MAX_FINDINGS = 30;
 // Where the CLI looks for the design system: the nearest of these marks the project. `check`

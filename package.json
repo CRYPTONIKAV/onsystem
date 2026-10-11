@@ -1,6 +1,6 @@
 {
   "name": "onsystem",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "mcpName": "io.github.dgesteves/onsystem",
   "description": "Keeps coding agents on your design system: it knows your real components, props, variants and tokens, catches the moment an agent invents one and has it fix it, and the same check gates your PRs. Local, zero config, works alongside @shadcn/lint.",
   "keywords": [
