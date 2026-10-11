@@ -26,9 +26,9 @@ import {
   type ResolvedConfig,
 } from './config.js';
 import { componentFiles, loadDesignSystem, type DesignSystem } from './design-system.js';
-import { explainProject } from './explain.js';
+import { explainProject, librariesLeftOut } from './explain.js';
 import { init } from './init.js';
-import { libraryAdapter } from './libraries/index.js';
+import { libraryAdapter, type LibrarySource } from './libraries/index.js';
 import { formatDiagnostics, uncheckedNotice, type OutputFormat } from './lint/index.js';
 import { serveStdio } from './server/stdio.js';
 import type { CheckResult, DesignSystemModel, Diagnostic } from './types.js';
@@ -548,9 +548,10 @@ async function selectInProject(
   }
 
   // A run that found no components or no color tokens passes without having
-  // checked them: say so, and fail in CI when asked to.
+  // checked them: say so, and fail in CI when asked to, unless the components come from a
+  // published library (MUI), whose colors may be in Sass: then it only says so.
   const notice = ds.notice();
-  if (notice && values['require-design-system']) {
+  if (notice && values['require-design-system'] && !ds.hasDesignSystem()) {
     io.stderr(`check --require-design-system: ${notice}`);
     return 2;
   }
@@ -657,11 +658,12 @@ async function selectInWorkspace(
     }
   }
 
-  // At a root, the gate is that some project has components and color tokens to check against.
+  // At a root, the gate is that some project has components and color tokens to check against,
+  // or components from a published library (MUI).
   if (values['require-design-system']) {
     let complete = false;
     for (const p of workspace.projects) {
-      if (!(await load(p)).notice()) {
+      if ((await load(p)).hasDesignSystem()) {
         complete = true;
         break;
       }
@@ -736,7 +738,7 @@ async function inspect(
     `root     ${model.root}`,
     `config   ${config.configFile ? displayPath(io.cwd, config.configFile) : '(defaults)'}`,
     ...(config.detected ? [`detected ${config.detected}`] : []),
-    ...describeLibraries(config, model).map((line) => `library  ${line}`),
+    ...describeLibraries(config, model, io.cwd).map((line) => `library  ${line}`),
     `files    ${plural(model.stats.files.components, 'component file')}, ${plural(model.stats.files.tokens, 'token file')}, ${plural(model.stats.files.docs, 'doc')}`,
     `time     ${model.stats.durationMs}ms${model.stats.fromCache ? ' (cache)' : ''}`,
     '',
@@ -765,14 +767,27 @@ async function inspect(
   return 0;
 }
 
-/** `MUI (@mui/material 9.4.0): 149 components from its type declarations`, per library found. */
-function describeLibraries(config: ResolvedConfig, model: DesignSystemModel): string[] {
-  return (config.libraries ?? []).map((library) => {
-    const title = libraryAdapter(library.package)?.title ?? library.package;
-    if (!library.dir) return `${title} (${library.package}): a dependency, but not installed`;
-    const count = model.components.filter((c) => c.library === library.package).length;
-    return `${title} (${library.package}${library.version ? ` ${library.version}` : ''}): ${plural(count, 'component')} from its type declarations`;
-  });
+/**
+ * `MUI (@mui/material 9.4.0): 149 components from its type declarations`, per library the
+ * project depends on, including those the config's `libraries` leaves out.
+ */
+function describeLibraries(
+  config: ResolvedConfig,
+  model: DesignSystemModel,
+  cwd: string,
+): string[] {
+  const name = (library: LibrarySource) =>
+    `${libraryAdapter(library.package)?.title ?? library.package} (${library.package}${library.version ? ` ${library.version}` : ''})`;
+  return [
+    ...(config.libraries ?? []).map((library) => {
+      if (!library.dir) return `${name(library)}: a dependency, but not installed`;
+      const count = model.components.filter((c) => c.library === library.package).length;
+      return `${name(library)}: ${plural(count, 'component')} from its type declarations`;
+    }),
+    ...(config.librariesOff ?? []).map(
+      (library) => `${name(library)}: ${librariesLeftOut(config, cwd)}`,
+    ),
+  ];
 }
 
 function tokenCounts(model: DesignSystemModel): Map<string, number> {
@@ -836,7 +851,7 @@ async function inspectWorkspace(
       `${project.dir}${project.name ? ` (${project.name})` : ''}`,
       ...(own ? [`  config     ${own}`] : []),
       ...(project.config.detected ? [`  detected   ${project.config.detected}`] : []),
-      ...describeLibraries(project.config, model).map((line) => `  library    ${line}`),
+      ...describeLibraries(project.config, model, io.cwd).map((line) => `  library    ${line}`),
       `  files      ${plural(model.stats.files.components, 'component file')}, ${plural(model.stats.files.tokens, 'token file')}, ${plural(model.stats.files.docs, 'doc')}`,
       `  components ${roots.length} + ${ds.components.length - roots.length} parts${roots.length ? `: ${listNames(roots.map((c) => c.name))}` : ''}`,
       `  tokens     ${tokens.length ? tokens.join(', ') : 'none'}`,

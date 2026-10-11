@@ -1,9 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { DEFAULT_SEVERITY, RULE_IDS } from './config.js';
+import { DEFAULT_SEVERITY, RULE_IDS, type ResolvedConfig } from './config.js';
 import type { DesignSystem } from './design-system.js';
 import { detectProject, type DetectionStep } from './detect.js';
+import { LIBRARY_IDS, type LibrarySource } from './libraries/index.js';
 import { relativePath } from './util/paths.js';
 
 /**
@@ -33,15 +34,20 @@ export function explainProject(ds: DesignSystem, cwd: string, indent = ''): stri
       );
     }
   }
-  // Published libraries, read from their type declarations whatever the config says.
+  // Published libraries, read from their type declarations whatever the config says about
+  // components, unless its `libraries` leaves them out.
+  const named = (library: LibrarySource) =>
+    `${library.package}${library.version ? ` ${library.version}` : ''}`;
   for (const library of config.libraries ?? []) {
     const count = model.components.filter((c) => c.library === library.package).length;
     out(
       library.dir
-        ? `  ${'found'.padEnd(6)} ${library.package} ${library.version ?? ''}`.trimEnd() +
-            `: a dependency, ${count} components from its type declarations in ${display(cwd, library.dir)}`
-        : `  ${'no'.padEnd(6)} ${library.package}: a dependency, but not installed`,
+        ? `  ${'found'.padEnd(6)} ${named(library)}: a dependency, ${count} components from its type declarations in ${display(cwd, library.dir)}`
+        : `  ${'no'.padEnd(6)} ${named(library)}: a dependency, but not installed`,
     );
+  }
+  for (const library of config.librariesOff ?? []) {
+    out(`  ${'no'.padEnd(6)} ${named(library)}: a dependency, ${librariesLeftOut(config, cwd)}`);
   }
 
   out();
@@ -62,6 +68,14 @@ export function explainProject(ds: DesignSystem, cwd: string, indent = ''): stri
       (fs.existsSync(path.join(config.root, 'tsconfig.json')) ? 'tsconfig.json' : '(none)'),
   );
   field('importPath', importPaths(ds));
+  field(
+    'libraries',
+    config.libraryIds === undefined
+      ? `every library onsystem reads (${LIBRARY_IDS.join(', ')})`
+      : config.libraryIds !== false && config.libraryIds.length
+        ? config.libraryIds.join(', ')
+        : `none ("libraries": ${JSON.stringify(config.libraryIds)})`,
+  );
   if (config.tailwindConfig) field('tailwind', display(config.root, config.tailwindConfig));
   if (config.designSystems) {
     field(
@@ -149,6 +163,11 @@ export function explainProject(ds: DesignSystem, cwd: string, indent = ''): stri
     );
   }
   return lines;
+}
+
+/** Why a library the project depends on is not read: `left out by "libraries" in onsystem.config.json`. */
+export function librariesLeftOut(config: Pick<ResolvedConfig, 'configFile'>, cwd: string): string {
+  return `left out by "libraries" in ${config.configFile ? display(cwd, config.configFile) : 'the config'}`;
 }
 
 /** The first few, then how many more: a package's exports can name hundreds of files. */

@@ -5,7 +5,12 @@ import { pathToFileURL } from 'node:url';
 import * as z from 'zod';
 
 import { detectProject, type DesignSystemSource, type ImportMapping } from './detect.js';
-import { detectLibraries, type LibrarySource } from './libraries/index.js';
+import {
+  detectLibraries,
+  LIBRARY_IDS,
+  type LibraryId,
+  type LibrarySource,
+} from './libraries/index.js';
 import { findTailwindConfig } from './tokens/tailwind-config.js';
 import { matchesGlob, slashGlob, toPosix } from './util/paths.js';
 import { closest } from './util/strings.js';
@@ -91,6 +96,20 @@ const tokenSourceSchema = z.union([
     .strict(),
 ]);
 
+/** `false`, or a list of library ids; an unknown id is named with the closest known one. */
+const librariesSchema = z.union([z.literal(false), z.array(z.enum(LIBRARY_IDS))], {
+  error: (issue) => {
+    const unknown = Array.isArray(issue.input)
+      ? (issue.input as unknown[]).find((id) => !(LIBRARY_IDS as readonly unknown[]).includes(id))
+      : undefined;
+    if (typeof unknown === 'string') {
+      const guess = closest(unknown, LIBRARY_IDS, 0.5);
+      return `Unknown library "${unknown}". ${guess ? `Did you mean "${guess}"?` : `Expected one of: ${LIBRARY_IDS.join(', ')}.`}`;
+    }
+    return `"libraries" is false, to read no library, or a list of the ones to read: ${JSON.stringify(LIBRARY_IDS)}.`;
+  },
+});
+
 const configShape = {
   $schema: z.string().optional(),
   components: globsSchema
@@ -118,6 +137,11 @@ const configShape = {
     .record(z.string(), z.string())
     .optional()
     .describe('Extra native element → component mappings, e.g. { "a": "Link" }.'),
+  libraries: librariesSchema
+    .optional()
+    .describe(
+      `Published component libraries to read from their type declarations when the project depends on them. Omitted: every one onsystem reads (${LIBRARY_IDS.join(', ')}). false: none. A list: only those, e.g. ["mui"].`,
+    ),
   includeDesignSystem: z
     .boolean()
     .optional()
@@ -188,6 +212,13 @@ export interface ResolvedConfig {
    * the code imports them, and the project's own components win a shared name.
    */
   libraries?: LibrarySource[] | undefined;
+  /**
+   * The config's `libraries`: the ids of the libraries to read, or false for none. Undefined
+   * reads every library onsystem supports.
+   */
+  libraryIds?: false | LibraryId[] | undefined;
+  /** Libraries the project depends on that `libraries` leaves out, so they are not read. */
+  librariesOff?: LibrarySource[] | undefined;
   elements: Record<string, string>;
   /** `check` lints the component files themselves, which it skips by default. */
   includeDesignSystem: boolean;
@@ -391,6 +422,8 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Resol
     }
   }
 
+  const libraries = detectLibraries(root, config.libraries);
+
   const tokenSources = options.tokens?.length
     ? options.tokens.map((p) => ({ path: p }))
     : config.tokens !== undefined
@@ -431,7 +464,9 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Resol
     detected: detection?.source,
     ...(detection?.designSystems ? { designSystems: detection.designSystems } : {}),
     tailwindConfig: findTailwindConfig(root),
-    libraries: detectLibraries(root),
+    libraries: libraries.read,
+    libraryIds: config.libraries,
+    librariesOff: libraries.off,
     elements: config.elements ?? {},
     includeDesignSystem: options.includeDesignSystem ?? config.includeDesignSystem ?? false,
     rules,

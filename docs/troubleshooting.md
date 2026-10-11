@@ -20,7 +20,7 @@ Most problems show up in `npx onsystem inspect`: from the app's folder it prints
 
 4. **`Tokens (0)`, or `No color tokens found`,** means no stylesheet or `*.tokens.json` defined any. Set `tokens` in the config to the file with the custom properties or the Tailwind `@theme`.
 
-In CI, `check --require-design-system` turns "nothing found" into a failure (exit code 2), so a moved design system cannot pass by checking nothing.
+In CI, `check --require-design-system` turns "nothing found" into a failure (exit code 2), so a moved design system cannot pass by checking nothing. An app on MUI passes with MUI's components alone: when its palette cannot be read (built in code or from Sass variables), `check` says that `no-hardcoded-color` did not run rather than fail.
 
 ## A monorepo root misses a project
 

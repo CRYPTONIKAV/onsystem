@@ -116,6 +116,24 @@
         "type": "string"
       }
     },
+    "libraries": {
+      "description": "Published component libraries to read from their type declarations when the project depends on them. Omitted: every one onsystem reads (mui). false: none. A list: only those, e.g. [\"mui\"].",
+      "anyOf": [
+        {
+          "type": "boolean",
+          "const": false
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "mui"
+            ]
+          }
+        }
+      ]
+    },
     "includeDesignSystem": {
       "description": "check: lint the design system's own component files too. Off by default: they implement the scale and primitives the rules enforce.",
       "type": "boolean"

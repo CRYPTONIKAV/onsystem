@@ -22,7 +22,7 @@ inputs:
     description: On pull requests and merge groups, report only findings on the lines the change touches. false reports every finding in the checked files.
     default: 'true'
   require-design-system:
-    description: Fail when no components or no color tokens are found, so the check cannot pass by checking nothing.
+    description: Fail when no components or no color tokens are found, so the check cannot pass by checking nothing. An app on a component library such as MUI passes with its components alone.
     default: 'true'
 
 outputs:

@@ -144,6 +144,17 @@ export class DesignSystem {
   }
 
   /**
+   * Whether `check --require-design-system` (and the GitHub Action, where it is on by default)
+   * finds a design system to check against: components and color tokens, or components from a
+   * published library (MUI). A library is the design system whatever its theme: when the theme's
+   * colors cannot be read (a palette from Sass variables), the check still runs and `notice()`
+   * says that no-hardcoded-color did not.
+   */
+  hasDesignSystem(): boolean {
+    return !this.notice() || this.model.components.some((c) => c.library !== undefined);
+  }
+
+  /**
    * What the rules could not check, when it matters: without components the
    * component rules find nothing, and without color tokens neither does
    * no-hardcoded-color, so a clean result says little. Undefined when both exist.

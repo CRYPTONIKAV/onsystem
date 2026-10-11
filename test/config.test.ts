@@ -137,6 +137,52 @@ describe('loadConfig', () => {
     );
   });
 
+  it('reads `libraries`: every supported library when omitted, none with false, or those listed', async () => {
+    // A project that depends on MUI (not installed here: the setting is what is tested).
+    const project = (config?: unknown) => {
+      const dir = fs.mkdtempSync(path.join(tmp, 'libraries-'));
+      fs.writeFileSync(
+        path.join(dir, 'package.json'),
+        JSON.stringify({ dependencies: { '@mui/material': '^9.4.0' } }),
+      );
+      if (config !== undefined) {
+        fs.writeFileSync(path.join(dir, 'onsystem.config.json'), JSON.stringify(config));
+      }
+      return dir;
+    };
+    const mui = [{ package: '@mui/material', dir: undefined, version: undefined }];
+
+    const omitted = await loadConfig({ root: project() });
+    expect(omitted).toMatchObject({ libraries: mui, librariesOff: [] });
+    expect(omitted.libraryIds).toBeUndefined();
+    expect(await loadConfig({ root: project({ libraries: false }) })).toMatchObject({
+      libraryIds: false,
+      libraries: [],
+      librariesOff: mui,
+    });
+    expect(await loadConfig({ root: project({ libraries: ['mui'] }) })).toMatchObject({
+      libraryIds: ['mui'],
+      libraries: mui,
+      librariesOff: [],
+    });
+    expect(await loadConfig({ root: project({ libraries: [] }) })).toMatchObject({
+      libraries: [],
+      librariesOff: mui,
+    });
+
+    await expect(loadConfig({ root: project({ libraries: ['chakra'] }) })).rejects.toThrow(
+      'Unknown library "chakra". Expected one of: mui.',
+    );
+    await expect(loadConfig({ root: project({ libraries: ['MUI'] }) })).rejects.toThrow(
+      'Unknown library "MUI". Did you mean "mui"?',
+    );
+    for (const value of [true, 'mui']) {
+      await expect(loadConfig({ root: project({ libraries: value }) })).rejects.toThrow(
+        '"libraries" is false, to read no library, or a list of the ones to read: ["mui"].',
+      );
+    }
+  });
+
   it('names unknown keys, rules and severities, with the closest valid one', async () => {
     const dir = fs.mkdtempSync(path.join(tmp, 'typo-'));
     fs.writeFileSync(
@@ -296,5 +342,16 @@ describe('loadConfig', () => {
     expect(Object.keys(schema.properties)).toEqual(
       expect.arrayContaining(['components', 'tokens', 'docs', 'rules', 'importPath']),
     );
+    expect(schema.properties.libraries).toMatchObject({
+      anyOf: [
+        { type: 'boolean', const: false },
+        { type: 'array', items: { type: 'string', enum: ['mui'] } },
+      ],
+    });
+    // The schema.json the package ships is the one the build writes from it.
+    const shipped = JSON.parse(
+      fs.readFileSync(path.resolve(import.meta.dirname, '../schema.json'), 'utf8'),
+    ) as { properties: Record<string, unknown> };
+    expect(shipped.properties).toEqual(schema.properties);
   });
 });

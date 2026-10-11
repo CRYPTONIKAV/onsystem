@@ -41,7 +41,7 @@ Install the dependencies first, as above: without them the props of components t
 | `only-changed-lines`    | `true`  | On pull requests and merge groups, report only findings on the changed lines; `false` reports every finding in the checked files |
 | `require-design-system` | `true`  | Fail when no components or no color tokens are found, so the check cannot pass by checking nothing ([CI and baselines](ci.md))   |
 
-The outputs `errors`, `warnings` and `outside-diff` count what was reported and what was left out. In a monorepo, add a job per app with `working-directory: apps/web`, each with its own design system and baseline.
+An app on a [published library](configuration.md#published-libraries-mui) (MUI) passes `require-design-system` with the library's components alone; when its theme's colors cannot be read, the step's log says that `no-hardcoded-color` did not run. The outputs `errors`, `warnings` and `outside-diff` count what was reported and what was left out. In a monorepo, add a job per app with `working-directory: apps/web`, each with its own design system and baseline.
 
 ## Make the check required
 

@@ -28,6 +28,7 @@ const THEME_CALLS = /^(?:createTheme|extendTheme|experimental_extendTheme|create
  * app creates with `createTheme`, where its values are written out.
  */
 export const mui: LibraryAdapter = {
+  id: 'mui',
   package: '@mui/material',
   title: 'MUI',
   augments: /declare\s+module\s+['"]@mui\/(?:material|system|types)(?:\/[\w./-]*)?['"]/,

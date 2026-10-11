@@ -378,3 +378,162 @@ export default function Page() {
     ]);
   });
 });
+
+/** A page with one invented variant, the finding that shows MUI was read. */
+const PAGE = `import { Button } from '@mui/material';
+
+export default function Page() {
+  return <Button variant="danger">Delete</Button>;
+}
+`;
+
+/** A theme whose palette comes from Sass variables, as Flowise's does: no color can be read. */
+const SASS_THEME = {
+  'src/themes/index.ts': `import { createTheme } from '@mui/material/styles';
+import colors from '../assets/scss/_themes-vars.module.scss';
+
+export const theme = createTheme({
+  palette: { primary: { main: colors.primaryMain }, background: { paper: colors.paper } },
+});
+`,
+  'src/assets/scss/_themes-vars.module.scss':
+    '$primaryMain: #2196f3;\n$paper: #ffffff;\n:export {\n  primaryMain: $primaryMain;\n  paper: $paper;\n}\n',
+};
+
+const ruleIds = (stdout: string) =>
+  (JSON.parse(stdout) as Results).flatMap((r) => r.diagnostics.map((d) => d.ruleId));
+
+describe('the libraries setting', () => {
+  it('turns library detection off with false, and inspect and --explain say so', async () => {
+    const root = muiApp({
+      'onsystem.config.json': JSON.stringify({ libraries: false }),
+      'src/page.tsx': PAGE,
+    });
+    const ds = await load(root);
+    expect(ds.model.components.filter((c) => c.library)).toEqual([]);
+    const { stdout } = await run(['inspect', '--no-cache', '--explain'], root);
+    expect(stdout).toContain(
+      'library  MUI (@mui/material 9.4.0): left out by "libraries" in onsystem.config.json',
+    );
+    expect(stdout).toContain(
+      '  no     @mui/material 9.4.0: a dependency, left out by "libraries" in onsystem.config.json',
+    );
+    expect(stdout).toMatch(/^ {2}libraries {4}none \("libraries": false\)$/m);
+    // MUI is not read, so its invented variant is not known to be one.
+    expect(await check(root, 'src/page.tsx')).toEqual([]);
+  });
+
+  it('reads every library it supports when omitted, or the ones a list names', async () => {
+    const listed = muiApp({ 'onsystem.config.json': JSON.stringify({ libraries: ['mui'] }) });
+    const explained = await run(['inspect', '--no-cache', '--explain'], listed);
+    expect(explained.stdout).toContain(
+      'library  MUI (@mui/material 9.4.0): 9 components from its type declarations',
+    );
+    expect(explained.stdout).toMatch(/^ {2}libraries {4}mui$/m);
+
+    const omitted = await run(['inspect', '--no-cache', '--explain'], muiApp());
+    expect(omitted.stdout).toContain(
+      'library  MUI (@mui/material 9.4.0): 9 components from its type declarations',
+    );
+    expect(omitted.stdout).toMatch(/^ {2}libraries {4}every library onsystem reads \(mui\)$/m);
+  });
+
+  it('applies a monorepo root config’s setting to the packages without a config', async () => {
+    const root = fixture(
+      {
+        'package.json': JSON.stringify({ name: 'acme', private: true }),
+        'pnpm-workspace.yaml': 'packages:\n  - apps/*\n',
+        'onsystem.config.json': JSON.stringify({ libraries: false }),
+        'apps/web/package.json': JSON.stringify({
+          name: '@acme/web',
+          dependencies: { '@mui/material': '^9.4.0' },
+        }),
+        'apps/web/src/page.tsx': PAGE,
+        ...muiPackage(),
+      },
+      { nodeModules: true },
+    );
+    const { workspace } = await loadTarget({ cwd: root });
+    expect(workspace?.projects).toEqual([]);
+    expect(workspace?.others).toEqual(['apps/web']);
+  });
+});
+
+describe('--require-design-system, which the GitHub Action turns on, on an MUI app', () => {
+  it('counts MUI as the design system, and says when the theme’s colors could not be read', async () => {
+    const root = muiApp({ ...SASS_THEME, 'src/page.tsx': PAGE });
+    // The arguments the GitHub Action passes by default.
+    const action = await run(
+      ['check', 'src', '--format', 'json', '--require-design-system', '--no-cache'],
+      root,
+    );
+    expect(action.code).toBe(1);
+    expect(ruleIds(action.stdout)).toEqual(['no-unknown-variant']);
+    expect(action.stderr).toBe(
+      'No color tokens found: no-hardcoded-color did not run. See https://onsystem.vercel.app/docs/configuration',
+    );
+    const github = await run(
+      ['check', 'src', '--format', 'github', '--require-design-system', '--no-cache'],
+      root,
+    );
+    expect(github.code).toBe(1);
+    expect(github.stdout).toContain(
+      '::warning title=onsystem::No color tokens found: no-hardcoded-color did not run.',
+    );
+
+    // With the palette written out, there is nothing to say.
+    const written = muiApp({
+      'src/theme.ts': THEME,
+      'src/colors.ts': "export const brand = { 400: '#7c3aed', 600: '#5b21b6' };\n",
+      'src/page.tsx': PAGE,
+    });
+    const complete = await run(
+      ['check', 'src', '--format', 'json', '--require-design-system', '--no-cache'],
+      written,
+    );
+    expect(complete.code).toBe(1);
+    expect(ruleIds(complete.stdout)).toEqual(['no-unknown-variant']);
+    expect(complete.stderr).toBe('');
+  });
+
+  it('still fails when MUI is a dependency that is not installed', async () => {
+    const root = fixture({
+      'package.json': JSON.stringify({ name: 'app', dependencies: { '@mui/material': '^9.4.0' } }),
+      'src/page.tsx': PAGE,
+    });
+    const { code, stderr } = await run(
+      ['check', 'src', '--format', 'json', '--require-design-system', '--no-cache'],
+      root,
+    );
+    expect(code).toBe(2);
+    expect(stderr).toContain('check --require-design-system: No design system found');
+  });
+
+  it('counts a workspace package on MUI as one with a design system, at the monorepo root', async () => {
+    const root = fixture(
+      {
+        'package.json': JSON.stringify({ name: 'acme', private: true }),
+        'pnpm-workspace.yaml': 'packages:\n  - apps/*\n',
+        'apps/web/package.json': JSON.stringify({
+          name: '@acme/web',
+          dependencies: { '@mui/material': '^9.4.0' },
+        }),
+        ...Object.fromEntries(
+          Object.entries(SASS_THEME).map(([file, text]) => [`apps/web/${file}`, text]),
+        ),
+        'apps/web/src/page.tsx': PAGE,
+        ...muiPackage(),
+      },
+      { nodeModules: true },
+    );
+    const { code, stdout, stderr } = await run(
+      ['check', '.', '--format', 'json', '--require-design-system', '--no-cache'],
+      root,
+    );
+    expect(code).toBe(1);
+    expect(ruleIds(stdout)).toEqual(['no-unknown-variant']);
+    expect(stderr).toBe(
+      'No color tokens found in apps/web: no-hardcoded-color did not run. See https://onsystem.vercel.app/docs/configuration',
+    );
+  });
+});

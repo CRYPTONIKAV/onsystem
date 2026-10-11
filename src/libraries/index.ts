@@ -11,6 +11,8 @@ import { mui } from './mui.js';
  * first; Chakra UI, Mantine, HeroUI and Radix Themes fit the same shape.
  */
 export interface LibraryAdapter {
+  /** Its id in the config's `libraries` list: `mui`. */
+  id: LibraryId;
   /** The package apps depend on and import components from: `@mui/material`. */
   package: string;
   /** Its name, for `inspect` and messages: `MUI`. */
@@ -58,6 +60,10 @@ export interface AddedValue {
   alongside?: string | undefined;
 }
 
+/** The ids of the libraries onsystem can read, for the config's `libraries` list. */
+export const LIBRARY_IDS = ['mui'] as const;
+export type LibraryId = (typeof LIBRARY_IDS)[number];
+
 /** The libraries onsystem can read, by package. */
 export const LIBRARIES: readonly LibraryAdapter[] = [mui];
 
@@ -77,26 +83,37 @@ export function libraryAdapter(name: string): LibraryAdapter | undefined {
 /**
  * The libraries `root`'s package.json depends on (dependencies, devDependencies or
  * peerDependencies), each found where Node.js would find it: in `node_modules` at the root or a
- * folder above it, as a monorepo hoists it. Nothing in the package is run.
+ * folder above it, as a monorepo hoists it. Nothing in the package is run. `ids` is the config's
+ * `libraries`: undefined reads every library onsystem supports, false none, a list those named;
+ * the dependencies it leaves out are `off`.
  */
-export function detectLibraries(root: string): LibrarySource[] {
+export function detectLibraries(
+  root: string,
+  ids?: false | readonly LibraryId[],
+): { read: LibrarySource[]; off: LibrarySource[] } {
   const pkg = readJson(path.join(root, 'package.json'));
-  if (!pkg) return [];
+  if (!pkg) return { read: [], off: [] };
   const dependencies = new Set(
     ['dependencies', 'devDependencies', 'peerDependencies'].flatMap((field) => {
       const value = pkg[field];
       return value && typeof value === 'object' ? Object.keys(value) : [];
     }),
   );
-  return LIBRARIES.filter((library) => dependencies.has(library.package)).map((library) => {
+  const found = LIBRARIES.filter((library) => dependencies.has(library.package)).map((library) => {
     const dir = installedPackage(root, library.package);
     const version = dir ? readJson(path.join(dir, 'package.json'))?.version : undefined;
-    return {
+    const source: LibrarySource = {
       package: library.package,
       dir,
       version: typeof version === 'string' ? version : undefined,
     };
+    return { id: library.id, source };
   });
+  const wanted = (id: LibraryId) => ids === undefined || (ids !== false && ids.includes(id));
+  return {
+    read: found.filter((f) => wanted(f.id)).map((f) => f.source),
+    off: found.filter((f) => !wanted(f.id)).map((f) => f.source),
+  };
 }
 
 /** The folder `name` is installed in for code in `root`, looking up through `node_modules` folders. */
