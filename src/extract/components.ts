@@ -732,7 +732,7 @@ function hasUnresolvedPart(
 }
 
 /** Where a prop is declared: the project, React's DOM typings, or another package. */
-function originOf(symbol: ts.Symbol): string {
+export function originOf(symbol: ts.Symbol): string {
   const declaration = symbol.declarations?.[0];
   if (!declaration) return 'own';
   const file = toPosix(declaration.getSourceFile().fileName);
@@ -786,7 +786,7 @@ function describeProp(
 }
 
 /** `(() => void)` → `() => void`, but leaves `(a) => (b)` alone. */
-function unwrapParens(text: string): string {
+export function unwrapParens(text: string): string {
   if (!text.startsWith('(') || !text.endsWith(')')) return text;
   let depth = 0;
   for (let i = 0; i < text.length; i++) {
@@ -807,7 +807,7 @@ function isAny(type: ts.Type): boolean {
   return (type.flags & ts.TypeFlags.Any) !== 0;
 }
 
-function registerPropSet(sets: Map<string, string[]>, names: string[]): string {
+export function registerPropSet(sets: Map<string, string[]>, names: string[]): string {
   const key = createHash('sha1').update(names.join(',')).digest('hex').slice(0, 10);
   if (!sets.has(key)) sets.set(key, names);
   return key;
@@ -927,7 +927,7 @@ function applyDestructuredDefaults(
 
 // ─── Element inference ──────────────────────────────────────────────────────
 
-const ELEMENT_INTERFACES: Record<string, string> = {
+export const ELEMENT_INTERFACES: Record<string, string> = {
   Anchor: 'a',
   Button: 'button',
   Input: 'input',

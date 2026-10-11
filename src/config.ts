@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import * as z from 'zod';
 
 import { detectProject, type DesignSystemSource, type ImportMapping } from './detect.js';
+import { detectLibraries, type LibrarySource } from './libraries/index.js';
 import { findTailwindConfig } from './tokens/tailwind-config.js';
 import { matchesGlob, slashGlob, toPosix } from './util/paths.js';
 import { closest } from './util/strings.js';
@@ -181,6 +182,12 @@ export interface ResolvedConfig {
   designSystems?: DesignSystemSource[] | undefined;
   /** A Tailwind v3 config, which maps color classes to custom properties (`primary` → `hsl(var(--primary))`). */
   tailwindConfig?: string | undefined;
+  /**
+   * Published component libraries the project depends on, read from their type declarations
+   * (MUI), whatever the config says about `components`: their components are checked where
+   * the code imports them, and the project's own components win a shared name.
+   */
+  libraries?: LibrarySource[] | undefined;
   elements: Record<string, string>;
   /** `check` lints the component files themselves, which it skips by default. */
   includeDesignSystem: boolean;
@@ -424,6 +431,7 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Resol
     detected: detection?.source,
     ...(detection?.designSystems ? { designSystems: detection.designSystems } : {}),
     tailwindConfig: findTailwindConfig(root),
+    libraries: detectLibraries(root),
     elements: config.elements ?? {},
     includeDesignSystem: options.includeDesignSystem ?? config.includeDesignSystem ?? false,
     rules,

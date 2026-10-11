@@ -260,6 +260,10 @@ function reportColor(
     replacement = cls ? `className="${cls}"` : cssVar;
     advice = cls ? `\`${cls}\` in className` : undefined;
   }
+  // Neither a class nor a custom property (a color of an MUI theme): how the token says to use it.
+  if (!cls && !cssVar && token.usage.length) {
+    advice = token.usage.map((usage) => `\`${usage}\``).join(' or ');
+  }
 
   const same = sameValue.length ? `, same value as ${sameValue.map((t) => t.name).join(', ')}` : '';
   const inMode = mode && token.modes?.[mode] !== undefined ? ` in ${mode} mode` : '';

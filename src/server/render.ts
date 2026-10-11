@@ -40,18 +40,27 @@ export function renderComponentList(ds: DesignSystem, project?: string): string 
     `${plural(roots.length, 'component')}${parts ? ` (+${plural(parts, 'part')})` : ''}${project ? ` in ${project}` : ''}. Call get_component before using one.`,
     '',
   ];
-  for (const component of roots) lines.push(...listItem(component));
+  const own = roots.filter((c) => !c.library);
+  for (const component of own) lines.push(...listItem(component));
+  // A library's components, imported alike: the import is said once.
+  for (const library of new Set(roots.flatMap((c) => (c.library ? [c.library] : [])))) {
+    if (own.length) lines.push('');
+    lines.push(`From ${library} (import { Name } from "${library}"):`, '');
+    for (const component of roots.filter((c) => c.library === library)) {
+      lines.push(...listItem(component, '', false));
+    }
+  }
   return lines.join('\n');
 }
 
-function listItem(component: ComponentInfo, note = ''): string[] {
+function listItem(component: ComponentInfo, note = '', withImport = true): string[] {
   const element = component.element ? ` <${component.element}>` : '';
   const lines = [
     `${component.name}${element}${note} — ${firstSentence(component.description) || 'No description.'}`,
   ];
   for (const variant of variantSummary(component)) lines.push(`  ${variant}`);
   if (component.subcomponents.length) lines.push(`  parts: ${component.subcomponents.join(', ')}`);
-  lines.push(`  ${importStatement(component)}`);
+  if (withImport) lines.push(`  ${importStatement(component)}`);
   return lines;
 }
 
@@ -201,6 +210,13 @@ export function renderComponent(
   if (component.variants.length) {
     lines.push('', '## Variants');
     for (const variant of component.variants) {
+      // A library's variants are a prop's values, with no classes to show: one line.
+      if (!Object.values(variant.classes).some(Boolean)) {
+        lines.push(
+          `${variant.name}: ${variant.values.join(' | ')}${variant.default ? ` (default "${variant.default}")` : ''}`,
+        );
+        continue;
+      }
       lines.push(`${variant.name}${variant.default ? ` (default "${variant.default}")` : ''}`);
       const width = Math.max(...variant.values.map((v) => v.length));
       for (const value of variant.values) {

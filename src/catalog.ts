@@ -86,7 +86,7 @@ export class Catalog {
         byKey.set(key, {
           component: rebase(component, root, file),
           ds,
-          package: owner(file),
+          package: component.library ?? owner(file),
           projects: [dir],
           ambiguous: false,
         });

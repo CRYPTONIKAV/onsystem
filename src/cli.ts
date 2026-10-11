@@ -28,6 +28,7 @@ import {
 import { componentFiles, loadDesignSystem, type DesignSystem } from './design-system.js';
 import { explainProject } from './explain.js';
 import { init } from './init.js';
+import { libraryAdapter } from './libraries/index.js';
 import { formatDiagnostics, uncheckedNotice, type OutputFormat } from './lint/index.js';
 import { serveStdio } from './server/stdio.js';
 import type { CheckResult, DesignSystemModel, Diagnostic } from './types.js';
@@ -735,10 +736,11 @@ async function inspect(
     `root     ${model.root}`,
     `config   ${config.configFile ? displayPath(io.cwd, config.configFile) : '(defaults)'}`,
     ...(config.detected ? [`detected ${config.detected}`] : []),
+    ...describeLibraries(config, model).map((line) => `library  ${line}`),
     `files    ${plural(model.stats.files.components, 'component file')}, ${plural(model.stats.files.tokens, 'token file')}, ${plural(model.stats.files.docs, 'doc')}`,
     `time     ${model.stats.durationMs}ms${model.stats.fromCache ? ' (cache)' : ''}`,
     '',
-    `Components (${ds.roots().length} + ${model.components.length - ds.roots().length} parts)`,
+    `Components (${ds.roots().length} + ${ds.components.length - ds.roots().length} parts)`,
   ];
   for (const c of ds.roots()) {
     const variants = c.variants.map((v) => `${v.name}[${v.values.length}]`).join(' ');
@@ -761,6 +763,16 @@ async function inspect(
   if (values.explain) lines.push('', ...explainProject(ds, io.cwd));
   io.stdout(lines.join('\n'));
   return 0;
+}
+
+/** `MUI (@mui/material 9.4.0): 149 components from its type declarations`, per library found. */
+function describeLibraries(config: ResolvedConfig, model: DesignSystemModel): string[] {
+  return (config.libraries ?? []).map((library) => {
+    const title = libraryAdapter(library.package)?.title ?? library.package;
+    if (!library.dir) return `${title} (${library.package}): a dependency, but not installed`;
+    const count = model.components.filter((c) => c.library === library.package).length;
+    return `${title} (${library.package}${library.version ? ` ${library.version}` : ''}): ${plural(count, 'component')} from its type declarations`;
+  });
 }
 
 function tokenCounts(model: DesignSystemModel): Map<string, number> {
@@ -824,8 +836,9 @@ async function inspectWorkspace(
       `${project.dir}${project.name ? ` (${project.name})` : ''}`,
       ...(own ? [`  config     ${own}`] : []),
       ...(project.config.detected ? [`  detected   ${project.config.detected}`] : []),
+      ...describeLibraries(project.config, model).map((line) => `  library    ${line}`),
       `  files      ${plural(model.stats.files.components, 'component file')}, ${plural(model.stats.files.tokens, 'token file')}, ${plural(model.stats.files.docs, 'doc')}`,
-      `  components ${roots.length} + ${model.components.length - roots.length} parts${roots.length ? `: ${listNames(roots.map((c) => c.name))}` : ''}`,
+      `  components ${roots.length} + ${ds.components.length - roots.length} parts${roots.length ? `: ${listNames(roots.map((c) => c.name))}` : ''}`,
       `  tokens     ${tokens.length ? tokens.join(', ') : 'none'}`,
       ...(model.warnings.length
         ? [`  warnings   ${model.warnings.length}: ${model.warnings[0] ?? ''}`]

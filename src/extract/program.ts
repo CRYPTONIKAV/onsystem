@@ -22,6 +22,8 @@ export interface ProjectConfig {
   configFile?: string;
   /** The tsconfig and the configs it extends. */
   configFiles: string[];
+  /** The files the tsconfig includes, absolute; empty without one. */
+  fileNames: string[];
 }
 
 /**
@@ -32,12 +34,25 @@ export interface ProjectConfig {
 export function readProjectConfig(root: string, tsconfig?: string): ProjectConfig {
   const configFile = tsconfig ? path.resolve(root, tsconfig) : path.join(root, 'tsconfig.json');
   if (!fs.existsSync(configFile)) {
-    return { options: { ...DEFAULT_OPTIONS }, pathsBase: root, paths: {}, configFiles: [] };
+    return {
+      options: { ...DEFAULT_OPTIONS },
+      pathsBase: root,
+      paths: {},
+      configFiles: [],
+      fileNames: [],
+    };
   }
   const configFiles = [configFile];
   const read = ts.readConfigFile(configFile, (file) => ts.sys.readFile(file));
   if (read.error) {
-    return { options: { ...DEFAULT_OPTIONS }, pathsBase: root, paths: {}, configFile, configFiles };
+    return {
+      options: { ...DEFAULT_OPTIONS },
+      pathsBase: root,
+      paths: {},
+      configFile,
+      configFiles,
+      fileNames: [],
+    };
   }
   // Every file read while parsing is a config it extends.
   const host: ts.ParseConfigHost = {
@@ -73,6 +88,7 @@ export function readProjectConfig(root: string, tsconfig?: string): ProjectConfi
     paths: options.paths ?? {},
     configFile,
     configFiles,
+    fileNames: parsed.fileNames,
   };
 }
 

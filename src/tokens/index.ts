@@ -224,7 +224,10 @@ export class TokenIndex {
         const color = parseColor(token.value, { bareHsl: true });
         if (color) this.colors.push({ token, color, ...colorModes(token) });
         if (token.tailwind) this.colorKeys.add(token.tailwind);
-      } else if (token.category === 'spacing' || token.category === 'radius') {
+      } else if (
+        (token.category === 'spacing' || token.category === 'radius') &&
+        token.origin !== 'library'
+      ) {
         const px = evaluateLength(token.value, resolve);
         if (px === undefined) continue;
         if (token.category === 'spacing' && token.tailwind === '') {

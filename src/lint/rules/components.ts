@@ -433,6 +433,8 @@ export const noUnknownProp: Rule = {
       const resolution = context.resolve(element);
       if (resolution.kind !== 'component' || resolution.component.openProps) continue;
       const component = resolution.component;
+      // `<Button component={Link} prefetch>` takes Link's props too, which the model does not know.
+      if (component.polymorphic && findAttribute(element, component.polymorphic)) continue;
       const own = component.props.map((p) => p.name);
       const known = new Set(own);
       for (const inherited of component.inherits) {
@@ -765,6 +767,49 @@ function hasLabel(attributes: readonly ts.JsxAttribute[]): boolean {
 }
 
 /**
+ * Whether the element's parent is a component that gives its child an accessible name, as MUI's
+ * `<Tooltip title="Delete">` does with a string title (not a JSX one, and not with
+ * `describeChild`, which makes it a description).
+ */
+function labelledByParent(context: RuleContext, element: JsxNode): boolean {
+  let node: ts.Node = element.node.parent;
+  while (
+    ts.isParenthesizedExpression(node) ||
+    ts.isJsxExpression(node) ||
+    (ts.isConditionalExpression(node) && node.condition !== element.node) ||
+    (ts.isBinaryExpression(node) &&
+      [
+        ts.SyntaxKind.AmpersandAmpersandToken,
+        ts.SyntaxKind.BarBarToken,
+        ts.SyntaxKind.QuestionQuestionToken,
+      ].includes(node.operatorToken.kind))
+  ) {
+    node = node.parent;
+  }
+  if (!ts.isJsxElement(node)) return false;
+  const parent = context.analysis.elements.find((e) => e.node === node);
+  if (!parent) return false;
+  const resolution = context.resolve(parent);
+  const labels = resolution.kind === 'component' ? resolution.component.labelsChild : undefined;
+  if (!labels) return false;
+  const unless = labels.unless ? findAttribute(parent, labels.unless) : undefined;
+  if (unless) {
+    const init = unless.initializer;
+    const value = init && ts.isJsxExpression(init) ? init.expression : init;
+    if (value?.kind !== ts.SyntaxKind.FalseKeyword) return false;
+  }
+  const label = findAttribute(parent, labels.prop);
+  if (!label?.initializer) return false;
+  if (ts.isStringLiteral(label.initializer)) return label.initializer.text.trim() !== '';
+  const value = ts.isJsxExpression(label.initializer) ? label.initializer.expression : undefined;
+  if (!value) return false;
+  const literals = literalValues(label);
+  if (literals.length) return literals.some((l) => l.text.trim() !== '');
+  // A JSX title renders as content, without becoming the child's label.
+  return !ts.isJsxElement(value) && !ts.isJsxSelfClosingElement(value) && !ts.isJsxFragment(value);
+}
+
+/**
  * The element whose `render` prop this one is, as in Base UI's
  * `<Dialog.Close render={<Button size="icon" />}><XIcon /></Dialog.Close>`:
  * the rendered button takes the host's children and attributes. Also through
@@ -853,6 +898,7 @@ export const iconButtonAccessibleName: Rule = {
       if (host === 'object') continue;
       if (host && (isButton(context, host) || host.hasSpread)) continue;
       if (hasLabel(element.attributes) || (host && hasLabel(host.attributes))) continue;
+      if (labelledByParent(context, element)) continue;
       const icons: string[] = [];
       const children = host ? [...host.children, ...element.children] : element.children;
       // A host with no children shows what its props say (`<Chip label=… render={<button />}>`).

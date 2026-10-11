@@ -46,7 +46,8 @@ export interface DiscoveredProject extends Project {
 
 /**
  * A monorepo seen from its root: every workspace package with a design system (an app
- * that uses one, or the design-system package itself), and how to find the project of
+ * that uses one, from source or a published library, or the design-system package
+ * itself), and how to find the project of
  * any file in it. Without a design system at the root, `check`, `inspect` and the MCP
  * server work from here, each file checked by its own project's design system.
  */
@@ -147,7 +148,9 @@ async function discoverWorkspace(
     const config = await loadProjectConfig(dir, root, rootConfig.configFile, options);
     const files = (await componentFiles(config)).length;
     const own = config.configFile !== undefined && config.configFile !== rootConfig.configFile;
-    if (files || own) {
+    // An app on a published library (MUI) has its design system in node_modules.
+    const library = config.libraries?.some((l) => l.dir !== undefined) ?? false;
+    if (files || own || library) {
       projects.push({
         root: dir,
         dir: relativePath(root, dir),

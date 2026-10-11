@@ -33,6 +33,16 @@ export function explainProject(ds: DesignSystem, cwd: string, indent = ''): stri
       );
     }
   }
+  // Published libraries, read from their type declarations whatever the config says.
+  for (const library of config.libraries ?? []) {
+    const count = model.components.filter((c) => c.library === library.package).length;
+    out(
+      library.dir
+        ? `  ${'found'.padEnd(6)} ${library.package} ${library.version ?? ''}`.trimEnd() +
+            `: a dependency, ${count} components from its type declarations in ${display(cwd, library.dir)}`
+        : `  ${'no'.padEnd(6)} ${library.package}: a dependency, but not installed`,
+    );
+  }
 
   out();
   out('Resolved config');
@@ -82,9 +92,16 @@ export function explainProject(ds: DesignSystem, cwd: string, indent = ''): stri
   out('Tokens');
   const found = ds.tokens;
   const files = model.stats.files.tokens;
+  // A library's theme (MUI's `createTheme`) is read from the app's source, not the token globs.
+  const themed = found.filter((t) => t.origin === 'library');
+  const fromFiles = found.length - themed.length;
   out(
-    `  ${found.length} tokens from ${files} ${files === 1 ? 'file' : 'files'}${files ? '' : `: no file matches ${config.tokens.map((t) => t.path).join(', ')}`}`,
+    `  ${fromFiles} tokens from ${files} ${files === 1 ? 'file' : 'files'}${files ? '' : `: no file matches ${config.tokens.map((t) => t.path).join(', ')}`}`,
   );
+  if (themed.length) {
+    const sources = [...new Set(themed.map((t) => t.source.file))];
+    out(`  ${themed.length} tokens from a library's theme in ${sources.join(', ')}`);
+  }
   // A value that still reads a custom property no token file defines (`var(--brand-500)`).
   const defined = new Set(found.map((t) => t.cssVar).filter((v): v is string => Boolean(v)));
   const missing = (value: string) =>

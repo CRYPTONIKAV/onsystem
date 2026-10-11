@@ -44,8 +44,12 @@ export interface Token {
   deprecated?: string | true;
   /** Name of the token this one aliases, if any. */
   aliasOf?: string;
-  /** Where the value comes from. `tailwind-default` marks Tailwind built-ins such as `--spacing`. */
-  origin?: 'tailwind-default';
+  /**
+   * Where the value comes from. `tailwind-default` marks Tailwind built-ins such as `--spacing`;
+   * `library` a value of a library's theme (MUI's `createTheme`), whose spacing and radius are
+   * listed but do not drive the length rules, whose scales are Tailwind's.
+   */
+  origin?: 'tailwind-default' | 'library';
   source: SourceLocation;
 }
 
@@ -139,6 +143,23 @@ export interface ComponentInfo {
   classNames: string[];
   /** CSS custom properties referenced in the component source. */
   cssVars: string[];
+  /**
+   * The published library it comes from, read from its type declarations rather than from
+   * source: `@mui/material`. The app's own components win where they share a name.
+   */
+  library?: string;
+  /**
+   * A prop that renders another element or component in its place and takes that one's props
+   * (`component` in MUI): when it is set, the props cannot be checked.
+   */
+  polymorphic?: string;
+  /** Another module that exports it as its default: `@mui/material/Button`. */
+  defaultImport?: string;
+  /**
+   * A prop whose text the component gives its child element as its accessible name (MUI's
+   * Tooltip `title`), unless the `unless` prop is set (`describeChild` makes it a description).
+   */
+  labelsChild?: { prop: string; unless?: string };
 }
 
 export interface DesignSystemModel {

@@ -129,6 +129,8 @@ export class LintTarget {
   private readonly moduleDirs = new Set<string>();
   /** The files extraction read, when the model says. */
   private readonly sources?: Set<string>;
+  /** Published libraries the model read from type declarations: `@mui/material`. */
+  readonly libraries: Set<string>;
 
   /**
    * `resolver` finds the module an import points at and what it exports
@@ -143,8 +145,9 @@ export class LintTarget {
     private readonly resolver?: Pick<ModuleResolver, 'locate' | 'exportsOf'>,
   ) {
     // With several design systems, the most imported one's components win a shared name:
-    // registered last, so they overwrite the others.
+    // registered last, so they overwrite the others. A library's come after the project's own.
     const rank = designSystemRank(config.designSystems);
+    this.libraries = new Set(model.components.flatMap((c) => (c.library ? [c.library] : [])));
     const byRank = [...model.components].sort((a, b) => rank(b) - rank(a));
     for (const component of byRank) {
       for (const name of [component.name, ...component.aliases]) {
@@ -156,7 +159,10 @@ export class LintTarget {
     this.tokens = new TokenIndex(model.tokens, {
       filesUsing: model.components.length ? familyUsage(model) : undefined,
     });
-    this.componentFiles = new Set(model.components.map((c) => c.source.file));
+    // The project's own component files: a library's declarations are no module of the project.
+    this.componentFiles = new Set(
+      model.components.filter((c) => !c.library).map((c) => c.source.file),
+    );
     this.exports = new Set(model.exports);
 
     // Root components only: `BreadcrumbLink` is an `a`, but `<a>` should not become a breadcrumb part.
@@ -197,16 +203,18 @@ export class LintTarget {
     // module: `@acme/ui` says nothing about `@acme/icons`. A pattern
     // (`@acme/ui/{path}`) covers what comes before `{path}`.
     const pattern = config.importPath?.indexOf('{path}') ?? -1;
-    this.importPrefixes = config.importPath
-      ? [pattern === -1 ? `${config.importPath}/` : config.importPath.slice(0, pattern)]
-      : unique(
-          [...this.importPaths]
+    this.importPrefixes = unique([
+      ...(config.importPath
+        ? [pattern === -1 ? `${config.importPath}/` : config.importPath.slice(0, pattern)]
+        : [...this.importPaths]
             .filter((p) => !p.startsWith('.'))
             // A package's own name (`@dub/ui`, imported through its barrel) covers its
             // subpaths, not its scope: `@dub/analytics` is another package.
             .map((p) => (isPackageName(p) ? `${p}/` : p.slice(0, p.lastIndexOf('/') + 1)))
-            .filter(Boolean),
-        );
+            .filter(Boolean)),
+      // A library's subpaths (`@mui/material/Button`), whatever the config names.
+      ...[...this.libraries].map((library) => `${library}/`),
+    ]);
     for (const file of this.componentFiles) {
       for (const module of modulePaths(file)) this.componentModules.add(module);
       this.moduleDirs.add(path.posix.dirname(file));
@@ -377,6 +385,9 @@ export class LintTarget {
     const resolved = specifier.startsWith('.')
       ? this.resolveRelative(specifier, fromFile)
       : undefined;
+    // `import Button from "@mui/material/Button"`: a library's folder module.
+    const fromLibrary = this.model.components.filter((c) => c.defaultImport === specifier);
+    if (fromLibrary.length === 1) return fromLibrary[0];
     const matches = this.model.components.filter(
       (c) =>
         c.exportName === 'default' &&
@@ -392,6 +403,19 @@ export class LintTarget {
   private resolveRelative(specifier: string, fromFile: string): string {
     const from = path.isAbsolute(fromFile) ? path.relative(this.model.root, fromFile) : fromFile;
     return path.posix.join(path.posix.dirname(toPosix(from)), stripExtension(specifier));
+  }
+
+  /** The library an import specifier points into (`@mui/material/Button`), if any. */
+  libraryOf(specifier: string): string | undefined {
+    for (const library of this.libraries) {
+      if (specifier === library || specifier.startsWith(`${library}/`)) return library;
+    }
+    return undefined;
+  }
+
+  /** The library's own component of that name: `Button` from `@mui/material`, not a wrapper. */
+  libraryComponent(name: string, library: string): ComponentInfo | undefined {
+    return (this.named.get(name) ?? []).find((c) => c.library === library);
   }
 
   /** Component names for "did you mean" suggestions. */
@@ -433,14 +457,17 @@ function familyUsage(model: DesignSystemModel): Map<string, Set<string>> {
 
 /**
  * A component's place among the design systems an app uses: 0 for the most imported, and
- * so on; with one design system, 0 for all.
+ * so on; with one design system, 0 for all. A library's components (MUI) come after them all.
  */
 function designSystemRank(
   sources: ResolvedConfig['designSystems'],
 ): (component: ComponentInfo) => number {
-  if (!sources || sources.length < 2) return () => 0;
+  // A library's components come after the project's own design systems: its wrappers win.
+  const last = (sources?.length ?? 1) + 1;
+  if (!sources || sources.length < 2) return (component) => (component.library ? last : 0);
   const ranks = new Map<string, number>();
   return (component) => {
+    if (component.library) return last;
     const file = component.source.file;
     let rank = ranks.get(file);
     if (rank === undefined) {

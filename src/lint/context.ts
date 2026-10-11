@@ -69,6 +69,8 @@ export function resolveElement(
   if (binding?.imported === '*' && rest.length) {
     if (!target.isDesignSystemImport(binding.source, file)) return { kind: 'external' };
     const name = rest.join('.');
+    const library = target.libraryOf(binding.source);
+    if (library) return fromLibrary(target, library, name, binding.source, rest.length > 1);
     const component = target.components.get(name);
     if (component) return { kind: 'component', component };
     // `UI.Icons.Add`: a member of a real export that is not a component (an
@@ -84,7 +86,18 @@ export function resolveElement(
   // Imported and declared again in an inner scope (`const Icon = icons[name]` next to an
   // imported `Icon` type): which one a tag means depends on scope, so it is not judged.
   if (binding && analysis.declared.has(head)) return { kind: 'external' };
-  if (binding) {
+  const library = binding ? target.libraryOf(binding.source) : undefined;
+  if (binding && library) {
+    const imported =
+      binding.imported === 'default'
+        ? target.defaultExport(binding.source, file)?.name
+        : binding.imported;
+    // A default export that is no component the model has: a module of the package's own.
+    if (imported === undefined) return { kind: 'external' };
+    const resolved = fromLibrary(target, library, imported, binding.source, rest.length > 0);
+    if (resolved.kind !== 'component') return resolved;
+    owner = resolved.component;
+  } else if (binding) {
     if (!target.isDesignSystemImport(binding.source, file)) return { kind: 'external' };
     const imported =
       binding.imported === 'default'
@@ -111,4 +124,24 @@ export function resolveElement(
   return member
     ? { kind: 'component', component: member }
     : { kind: 'missing-member', owner, member: rest.join('.') };
+}
+
+/**
+ * `name` from a library (`@mui/material`, or a module of it such as `@mui/material/Button`): its
+ * own component of that name, never a wrapper the project has. A name the package exports that
+ * is no component (a context, a styled slot it does not offer), or one imported from one of its
+ * modules rather than the package itself, is not judged; one the package does not export at all
+ * is invented.
+ */
+function fromLibrary(
+  target: LintTarget,
+  library: string,
+  name: string,
+  source: string,
+  member: boolean,
+): Resolution {
+  const component = target.libraryComponent(name, library);
+  if (component) return { kind: 'component', component };
+  if (source !== library || target.exports.has(name) || member) return { kind: 'external' };
+  return { kind: 'missing-export', name, source };
 }
