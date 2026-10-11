@@ -11,7 +11,7 @@ import {
 } from '../extract/components.js';
 import { projectFiles, type ProjectConfig } from '../extract/program.js';
 import type { ComponentInfo, InheritedProps, PropInfo, VariantInfo } from '../types.js';
-import { relativePath } from '../util/paths.js';
+import { isInside, relativePath } from '../util/paths.js';
 import { truncate, unique } from '../util/strings.js';
 import type { LibraryAdapter } from './index.js';
 
@@ -57,9 +57,11 @@ export function extractLibrary(options: ExtractLibraryOptions): LibraryExtractio
     warnings: [warning],
     dependencies: [],
   });
+  // As TypeScript spells the files it resolves: the path the file system returns, with Windows'
+  // long names for short ones (`RUNNER~1`) and the case on disk.
   let real: string;
   try {
-    real = fs.realpathSync(dir);
+    real = fs.realpathSync.native(dir);
   } catch {
     return empty(`${adapter.package}: ${dir} could not be read`);
   }
@@ -86,13 +88,13 @@ export function extractLibrary(options: ExtractLibraryOptions): LibraryExtractio
   if (!moduleSymbol) return empty(`${adapter.package}: ${entry} has no exports`);
 
   // Where a file is, as the app sees the package (`node_modules/@mui/material/…`).
-  const shown = (file: string) =>
-    relativePath(
+  const shown = (file: string) => {
+    const absolute = path.resolve(file);
+    return relativePath(
       root,
-      file.startsWith(`${real}${path.sep}`) || file.startsWith(`${real}/`)
-        ? path.join(dir, path.relative(real, file))
-        : file,
+      isInside(real, absolute) ? path.join(dir, path.relative(real, absolute)) : absolute,
     );
+  };
   const context: Context = {
     checker,
     adapter,

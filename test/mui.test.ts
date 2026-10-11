@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -169,6 +170,19 @@ describe('MUI, read from its type declarations', () => {
       prop: 'title',
       unless: 'describeChild',
     });
+  });
+
+  it('names declaration files from the root, however the file system spells the path', async () => {
+    // TypeScript resolves the package to the path the file system returns: Windows' long name for
+    // a short one (RUNNER~1, as GitHub's runners give the temporary folder), the case on disk
+    // where names ignore case. Respelling the root's case reproduces that on macOS and Windows.
+    const root = muiApp();
+    const respelled = path.join(path.dirname(root), path.basename(root).toUpperCase());
+    if (!fs.existsSync(respelled)) return; // A file system where case matters: nothing to respell.
+    const ds = await load(respelled);
+    expect(component(ds, 'Button').source.file).toBe(
+      'node_modules/@mui/material/Button/Button.d.ts',
+    );
   });
 
   it('checks code that uses it: invented values, props and components', async () => {
